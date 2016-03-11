@@ -1,0 +1,17 @@
+{
+  "name": "facile-state-machina",
+  "version": "1.0.0",
+  "description": "Barebones finite state machine with event queues inspired by Machina.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "fsm",
+    "eventqueue",
+    "state",
+    "machine"
+  ],
+  "author": "Peter Hanneman <peter@alloy.co>",
+  "license": "MIT"
+}

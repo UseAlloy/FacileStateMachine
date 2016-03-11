@@ -1,2 +1,7 @@
-# FacileStateMachine
-Barebones finite state machine with event queues inspired by Machina.
+***Barebones Finite State Machine***
+
+API:
+  this.transition()
+  this.handle()
+  this.deferEvents()
+  this.setQueueDepth()
