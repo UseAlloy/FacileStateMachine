@@ -1,8 +1,8 @@
 {
-  "name": "facile-state-machina",
-  "version": "1.0.0",
+  "name": "facile-state-machine",
+  "version": "1.0.1",
   "description": "Barebones finite state machine with event queues inspired by Machina.",
-  "main": "index.js",
+  "main": "fsm.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
