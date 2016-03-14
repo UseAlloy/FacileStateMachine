@@ -1,11 +1,13 @@
+// TODO: Consider adding a debug mode or extending the event emitter class
+// TODO: Consider adding a priorEvent accessor
 'use strict';
 
 module.exports = class FSM {
   constructor(options) {
     this.currentState = undefined;
     this.initialState = options.initialState;
-    this.states = options.states;
-    this.meta = Object.keys(this.states).reduce((meta, stateName) => {
+    this.priorState = undefined;
+    this.meta = Object.keys(options.states).reduce((meta, stateName) => {
       meta[stateName] = {
         concurrency: undefined,
         defer: false,
@@ -13,6 +15,7 @@ module.exports = class FSM {
       };
       return meta;
     }, {});
+    this.states = options.states;
     this.transitionChain = Promise.resolve();
     // Bind unexpected properties to this class so
     // that they may be used internally or externally
@@ -65,6 +68,7 @@ module.exports = class FSM {
         this.states[this.currentState]._onExit.apply(this, []);
       }
 
+      this.priorState = this.currentState;
       this.currentState = targetState;
       // Reset the event queue deferral if present before calling target's onEnter
       this.meta[this.currentState].defer = false;
@@ -91,11 +95,13 @@ module.exports = class FSM {
         targetEvent = arguments[0];
         break;
       }
+
       case 2: {
         targetState = arguments[0]; // Broken for this.handle('event in same state', argument1)...
         targetEvent = arguments[1];
         break;
       }
+
       default: {
         targetState = arguments[0];
         targetEvent = arguments[1];
