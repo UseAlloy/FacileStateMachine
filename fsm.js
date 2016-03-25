@@ -29,12 +29,14 @@ module.exports = class FSM {
 
   // Adds the initial state to the transition chain and executes the onEnter if it exists
   _initalize() {
-    if (!this.states[this.initialState]) throw new Error('Initial state is undefined!');
+    if (!this.states[this.initialState]) {
+      throw new Error('Initial state is undefined!');
+    }
     this.transitionChain = this.transitionChain.then(() => {
       this.currentState = this.initialState;
       // If the initial state has an onEnter function execute it
       if (this.states[this.currentState]._onEnter) {
-        this.states[this.currentState]._onEnter.apply(this, []);
+        this.states[this.currentState]._onEnter.call(this);
       }
     });
   }
@@ -58,14 +60,16 @@ module.exports = class FSM {
   }
 
   transition(targetState) {
-    if (!this.states[targetState]) throw new Error('Target state is undefined!');
+    if (!this.states[targetState]) {
+      throw new Error('Target state is undefined!');
+    }
 
     // Chain the transitions such that the next transition
     // can't happen until the current one has resolved
     this.transitionChain = this.transitionChain.then(() => {
       // Call current state's onExit if it exists
       if (this.currentState && this.states[this.currentState]._onExit) {
-        this.states[this.currentState]._onExit.apply(this, []);
+        this.states[this.currentState]._onExit.call(this);
       }
 
       this.priorState = this.currentState;
@@ -76,8 +80,13 @@ module.exports = class FSM {
       this.meta[this.currentState].concurrency = undefined;
 
       // Call the target state's onEnter if it exsits
+      // Will pass additional arguments to this.transition
+      // through to the target state's _onEnter function
       if (this.states[targetState]._onEnter) {
-        this.states[targetState]._onEnter.apply(this, []);
+        this.states[targetState]._onEnter.apply(
+          this,
+          Array.prototype.slice.call(arguments, 1)
+        );
       }
 
       this._drainQueue();
@@ -90,14 +99,15 @@ module.exports = class FSM {
     let targetEventArgs = [];
 
     switch (arguments.length) {
-      case 0: { throw new Error('Function requires at least one argument!'); }
+      case 0: { throw new Error('Handle function requires at least one argument!'); }
       case 1: {
         targetEvent = arguments[0];
         break;
       }
 
       case 2: {
-        targetState = arguments[0]; // Broken for this.handle('event in same state', argument1)...
+        // TODO: Broken for this.handle('event in same state', argument1)...
+        targetState = arguments[0];
         targetEvent = arguments[1];
         break;
       }
