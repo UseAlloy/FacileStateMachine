@@ -64,6 +64,8 @@ module.exports = class FSM {
       throw new Error('Target state is undefined!');
     }
 
+    let transitionResult;
+
     // Chain the transitions such that the next transition
     // can't happen until the current one has resolved
     this.transitionChain = this.transitionChain.then(() => {
@@ -83,13 +85,15 @@ module.exports = class FSM {
       // Will pass additional arguments to this.transition
       // through to the target state's _onEnter function
       if (this.states[targetState]._onEnter) {
-        this.states[targetState]._onEnter.apply(
+        transitionResult = this.states[targetState]._onEnter.apply(
           this,
           Array.prototype.slice.call(arguments, 1)
         );
       }
 
       this._drainQueue();
+
+      return transitionResult;
     });
   }
 
