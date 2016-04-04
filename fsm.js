@@ -6,7 +6,6 @@ module.exports = class FSM {
   constructor(options) {
     this.currentState = undefined;
     this.initialState = options.initialState;
-    this.priorState = undefined;
     this.meta = Object.keys(options.states).reduce((meta, stateName) => {
       meta[stateName] = {
         concurrency: undefined,
@@ -15,6 +14,7 @@ module.exports = class FSM {
       };
       return meta;
     }, {});
+    this.priorState = undefined;
     this.states = options.states;
     this.transitionChain = Promise.resolve();
     // Bind unexpected properties to this class so
@@ -48,8 +48,7 @@ module.exports = class FSM {
     let currentCycleEvents = eventQueue.slice(0, concurrency);
 
     if (currentCycleEvents.length > 0) {
-      eventQueue = eventQueue.slice(concurrency);
-
+      this.meta[this.currentState].queue = eventQueue.slice(concurrency);
       currentCycleEvents.forEach((queued) => {
         this.states[this.currentState][queued.event].apply(
           this,
@@ -98,9 +97,9 @@ module.exports = class FSM {
   }
 
   handle() {
-    let targetState = this.currentState;
     let targetEvent;
     let targetEventArgs = [];
+    let targetState = this.currentState;
 
     switch (arguments.length) {
       case 0: { throw new Error('Handle function requires at least one argument!'); }

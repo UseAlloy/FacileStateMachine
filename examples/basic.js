@@ -1,8 +1,6 @@
-const FSM = require('../index');
+const FSM = require('../fsm');
 
-// a._onEnter -> a._onExit -> b._onEnter -> b.test
-
-new FSM({
+var fsm = new FSM({
   initialState: 'a',
   states: {
     a: {
