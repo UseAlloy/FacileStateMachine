@@ -1,24 +1,24 @@
-// TODO: Consider adding a debug mode or extending the event emitter class
-// TODO: Consider adding a priorEvent accessor
 'use strict';
 
-module.exports = class FSM {
+const EventEmitter = require('events').EventEmitter;
+
+module.exports = class FSM extends EventEmitter {
   constructor(options) {
-    this.currentState = undefined;
-    this.initialState = options.initialState;
+    super();
+    this.currentState = undefined; // String name of current state
+    this.initialState = options.initialState; // Optional string name of initial state
     this.meta = Object.keys(options.states).reduce((meta, stateName) => {
       meta[stateName] = {
-        concurrency: undefined,
         defer: false,
+        depth: undefined,
         queue: [],
       };
       return meta;
     }, {});
-    this.priorState = undefined;
+    this.priorState = undefined; // String name of previous state before last transition
     this.states = options.states;
     this.transitionChain = Promise.resolve();
-    // Bind unexpected properties to this class so
-    // that they may be used internally or externally
+    // Bind any "unexpected" properties to the class for internal/external availability
     Object.keys(options).forEach((propertyName) => {
       if (propertyName !== 'initialState' && propertyName !== 'states') {
         this[propertyName] = options[propertyName];
@@ -27,49 +27,54 @@ module.exports = class FSM {
     this._initalize();
   }
 
-  // Adds the initial state to the transition chain and executes the onEnter if it exists
+  // If an "initialState" was specified we'll transition to that
+  // and execute its "_onEnter" function if one was defined
   _initalize() {
-    if (!this.states[this.initialState]) {
-      throw new Error('Initial state is undefined!');
-    }
-    this.transitionChain = this.transitionChain.then(() => {
-      this.currentState = this.initialState;
-      // If the initial state has an onEnter function execute it
-      if (this.states[this.currentState]._onEnter) {
-        this.states[this.currentState]._onEnter.call(this);
-      }
-    });
-  }
-
-  _drainQueue() {
-    const concurrency = this.meta[this.currentState].concurrency || this.meta[this.currentState].queue.length;
-
-    let eventQueue = this.meta[this.currentState].queue;
-    let currentCycleEvents = eventQueue.slice(0, concurrency);
-
-    if (currentCycleEvents.length > 0) {
-      this.meta[this.currentState].queue = eventQueue.slice(concurrency);
-      currentCycleEvents.forEach((queued) => {
-        this.states[this.currentState][queued.event].apply(
-          this,
-          queued.args
-        );
+    if (this.states[this.initialState]) {
+      this.transitionChain = this.transitionChain.then(() => {
+        this.currentState = this.initialState;
+        if (this.states[this.currentState]._onEnter) {
+          this.emit('beforeEnter', this.initialState);
+          this.states[this.currentState]._onEnter.call(this);
+        }
+        this.emit('afterTransition', undefined, this.initialState);
       });
     }
   }
 
+  // Pops and executes events after transitioning into another state
+  // By default all events are processed in the order they were received
+  // but if "setQueueDepth" was used, only up to that X number of events will be
+  // processed during this transition, the rest will remain in the state's queue
+  // waiting to be handled until the following transition into that state
+  _drainQueue() {
+    const depth = this.meta[this.currentState].depth || this.meta[this.currentState].queue.length;
+    const eventQueue = this.meta[this.currentState].queue;
+    const currentCycleEvents = eventQueue.slice(0, depth);
+    if (currentCycleEvents.length > 0) {
+      this.meta[this.currentState].queue = eventQueue.slice(depth);
+      currentCycleEvents.forEach((queued) => {
+        this.emit('beforeHandle', this.currentState, queued.event, true);
+        this.states[this.currentState][queued.event].apply(this, queued.args);
+      });
+    }
+  }
+
+  // Attempt to move into the target state
   transition(targetState) {
+    // NOTE: I'm unsure whether to silently ignore
+    // transitions to undefined states or throw an error?
     if (!this.states[targetState]) {
-      throw new Error('Target state is undefined!');
+      throw new Error(`Target state ${targetState} is undefined!`);
     }
 
     let transitionResult;
 
-    // Chain the transitions such that the next transition
-    // can't happen until the current one has resolved
+    // Add the target state to the transition state
     this.transitionChain = this.transitionChain.then(() => {
       // Call current state's onExit if it exists
       if (this.currentState && this.states[this.currentState]._onExit) {
+        this.emit('beforeExit', this.currentState);
         this.states[this.currentState]._onExit.call(this);
       }
 
@@ -77,25 +82,30 @@ module.exports = class FSM {
       this.currentState = targetState;
       // Reset the event queue deferral if present before calling target's onEnter
       this.meta[this.currentState].defer = false;
-      // Reset the event queue concurrency
-      this.meta[this.currentState].concurrency = undefined;
+      // Reset the event queue depth
+      this.meta[this.currentState].depth = undefined;
 
       // Call the target state's onEnter if it exsits
       // Will pass additional arguments to this.transition
       // through to the target state's _onEnter function
-      if (this.states[targetState]._onEnter) {
+      if (this.states[this.currentState]._onEnter) {
+        this.emit('beforeEnter', this.currentState);
         transitionResult = this.states[targetState]._onEnter.apply(
           this,
           Array.prototype.slice.call(arguments, 1)
         );
       }
 
+      this.emit('afterTransition', this.priorState, this.currentState);
+
+      // Attempt to process any queued events for the state we just transitioned into
       this._drainQueue();
 
       return transitionResult;
     });
   }
 
+  // Execute a function within a state
   handle() {
     let targetEvent;
     let targetEventArgs = [];
@@ -107,14 +117,12 @@ module.exports = class FSM {
         targetEvent = arguments[0];
         break;
       }
-
       case 2: {
         // TODO: Broken for this.handle('event in same state', argument1)...
         targetState = arguments[0];
         targetEvent = arguments[1];
         break;
       }
-
       default: {
         targetState = arguments[0];
         targetEvent = arguments[1];
@@ -131,6 +139,8 @@ module.exports = class FSM {
         });
       } else {
         // Execute event immediately without queueing
+        console.log('\n\n\n\n~~~~~~~>>>>', this.currentState, targetEvent);
+        this.emit('beforeHandle', this.currentState, targetEvent, false);
         this.states[this.currentState][targetEvent].apply(
           this,
           targetEventArgs
@@ -145,15 +155,17 @@ module.exports = class FSM {
     }
   }
 
-  // Future events will not be executed until we re-enter the current state
+  // Future handle events will not be executed until we re-enter the current state
   deferEvents() {
     this.meta[this.currentState].defer = true;
+    this.emit('afterDefer', this.currentState);
   }
 
-  // Override's _drainQueue's concurrency value
-  // TODO: Make this work without draining as well ex: within the same state without transitioning
+  // Override's _drainQueue's depth value
+  // TODO: Allow queue depth to be set from any state?
   setQueueDepth(depth) {
-    this.meta[this.currentState].concurrency = depth;
+    this.meta[this.currentState].depth = depth;
+    this.emit('aferDepth', this.currentState, depth);
   }
 
   // Syntactic sugar
