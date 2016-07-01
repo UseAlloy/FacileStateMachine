@@ -139,7 +139,6 @@ module.exports = class FSM extends EventEmitter {
         });
       } else {
         // Execute event immediately without queueing
-        console.log('\n\n\n\n~~~~~~~>>>>', this.currentState, targetEvent);
         this.emit('beforeHandle', this.currentState, targetEvent, false);
         this.states[this.currentState][targetEvent].apply(
           this,
