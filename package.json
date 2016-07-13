@@ -1,6 +1,6 @@
 {
   "name": "facile-state-machine",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Barebones finite state machine with event queues inspired by Machina.",
   "main": "fsm.js",
   "scripts": {

@@ -16,6 +16,7 @@ module.exports = class FSM extends EventEmitter {
       return meta;
     }, {});
     this.priorState = undefined; // String name of previous state before last transition
+    this.priorEvent = undefined; // String name of the previous named handle event
     this.states = options.states;
     this.transitionChain = Promise.resolve();
     // Bind any "unexpected" properties to the class for internal/external availability
@@ -44,9 +45,9 @@ module.exports = class FSM extends EventEmitter {
 
   // Pops and executes events after transitioning into another state
   // By default all events are processed in the order they were received
-  // but if "setQueueDepth" was used, only up to that X number of events will be
-  // processed during this transition, the rest will remain in the state's queue
-  // waiting to be handled until the following transition into that state
+  // but if "setQueueDepth" was used, only up to the specified number of events
+  // will be processed during this transition, the rest will remain in the
+  // state's queue waiting to be handled after the _onEnter
   _drainQueue() {
     const depth = this.meta[this.currentState].depth || this.meta[this.currentState].queue.length;
     const eventQueue = this.meta[this.currentState].queue;
@@ -56,6 +57,7 @@ module.exports = class FSM extends EventEmitter {
       currentCycleEvents.forEach((queued) => {
         this.emit('beforeHandle', this.currentState, queued.event, true);
         this.states[this.currentState][queued.event].apply(this, queued.args);
+        this.priorEvent = queued.event;
       });
     }
   }
@@ -144,6 +146,7 @@ module.exports = class FSM extends EventEmitter {
           this,
           targetEventArgs
         );
+        this.priorEvent = targetEvent;
       }
     } else {
       // Push event into the target state's event queue
