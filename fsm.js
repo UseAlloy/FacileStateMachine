@@ -36,7 +36,11 @@ module.exports = class FSM extends EventEmitter {
         this.currentState = this.initialState;
         if (this.states[this.currentState]._onEnter) {
           this.emit('beforeEnter', this.initialState);
-          this.states[this.currentState]._onEnter.call(this);
+          try {
+            this.states[this.currentState]._onEnter.call(this);
+          } catch (exception) {
+            this.emit('exception', this.currentState, '_onEnter', exception);
+          }
         }
         this.emit('afterTransition', undefined, this.initialState);
       });
@@ -56,7 +60,11 @@ module.exports = class FSM extends EventEmitter {
       this.meta[this.currentState].queue = eventQueue.slice(depth);
       currentCycleEvents.forEach((queued) => {
         this.emit('beforeHandle', this.currentState, queued.event, true);
-        this.states[this.currentState][queued.event].apply(this, queued.args);
+        try {
+          this.states[this.currentState][queued.event].apply(this, queued.args);
+        } catch (exception) {
+          this.emit('exception', this.currentState, queued.event, exception);
+        }
         this.priorEvent = queued.event;
       });
     }
@@ -77,7 +85,11 @@ module.exports = class FSM extends EventEmitter {
       // Call current state's onExit if it exists
       if (this.currentState && this.states[this.currentState]._onExit) {
         this.emit('beforeExit', this.currentState);
-        this.states[this.currentState]._onExit.call(this);
+        try {
+          this.states[this.currentState]._onExit.call(this);
+        } catch (exception) {
+          this.emit('exception', this.currentState, '_onExit', exception);
+        }
       }
 
       this.priorState = this.currentState;
@@ -92,12 +104,15 @@ module.exports = class FSM extends EventEmitter {
       // through to the target state's _onEnter function
       if (this.states[this.currentState]._onEnter) {
         this.emit('beforeEnter', this.currentState);
-        transitionResult = this.states[targetState]._onEnter.apply(
-          this,
-          Array.prototype.slice.call(arguments, 1)
-        );
+        try {
+          transitionResult = this.states[targetState]._onEnter.apply(
+            this,
+            Array.prototype.slice.call(arguments, 1)
+          );
+        } catch (exception) {
+          this.emit('exception', this.targetState, '_onEnter', exception);
+        }
       }
-
       this.emit('afterTransition', this.priorState, this.currentState);
 
       // Attempt to process any queued events for the state we just transitioned into
@@ -142,11 +157,15 @@ module.exports = class FSM extends EventEmitter {
       } else {
         // Execute event immediately without queueing
         this.emit('beforeHandle', this.currentState, targetEvent, false);
-        this.states[this.currentState][targetEvent].apply(
-          this,
-          targetEventArgs
-        );
-        this.priorEvent = targetEvent;
+        try {
+          this.states[this.currentState][targetEvent].apply(
+            this,
+            targetEventArgs
+          );
+          this.priorEvent = targetEvent;
+        } catch (exception) {
+          this.emit('exception', this.currentState, targetEvent, exception);
+        }
       }
     } else {
       // Push event into the target state's event queue
